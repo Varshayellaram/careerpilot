@@ -5,6 +5,7 @@ from utils.resume_parser import extract_text_from_pdf
 from agents.jd_analyzer import analyze_jd
 import uvicorn
 from agents.skill_gap_agent import explain_skill, calculate_match_percentage
+from agents.company_intel_agent import get_company_intelligence
 import os
 
 app = FastAPI(title="CareerPilot AI Service")
@@ -158,6 +159,29 @@ async def calculate_match_route(request: MatchPercentageRequest):
     except Exception as e:
         print(f"Match calculation error: {e}")
         return {"error": str(e)}
+    
+
+# ── Company Intelligence Route ────────────────────────────────────────────────
+# Accepts company name and role
+# Runs web searches and returns structured company brief
+# Feeds into resume tailor and cover letter agents later
+class CompanyIntelRequest(BaseModel):
+    company_name: str    # e.g. "Razorpay"
+    role: str            # e.g. "Software Engineer"
+
+@app.post("/company-intel")
+async def company_intel_route(request: CompanyIntelRequest):
+    """
+    Researches company using Tavily web search
+    Returns structured intelligence for resume tailoring
+    """
+    try:
+        result = get_company_intelligence(request.company_name, request.role)
+        return result
+    except Exception as e:
+        print(f"Company intel error: {e}")
+        return {"error": str(e)}
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
