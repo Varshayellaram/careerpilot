@@ -6,9 +6,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/authRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const jdRoutes = require('./routes/jdRoutes');
-
-
-
+const skillGapRoutes = require('./routes/skillGapRoutes');
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));  
@@ -19,6 +17,7 @@ app.use(express.urlencoded())
 app.use('/api/auth', authRoutes);   //when frontend req is localhost:5000/api/auth/register or localhost:5000/api/auth/login this line will be executed and this api/auth will be sent to authRoutes file and navigates to that file
 app.use('/api/resume', resumeRoutes);  //when frontend req is localhost:5000/api/resume/ this line will execute and navigate to resumeRoutes file
 app.use('/api/jd', jdRoutes);
+app.use('/api/skill-gap', skillGapRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

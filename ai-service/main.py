@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from utils.resume_parser import extract_text_from_pdf
 from agents.jd_analyzer import analyze_jd
 import uvicorn
+from agents.skill_gap_agent import explain_skill, calculate_match_percentage
 import os
 
 app = FastAPI(title="CareerPilot AI Service")
@@ -89,6 +90,74 @@ async def extract_skills(request: ResumeTextRequest):
         return {"error": str(e)}
 
 
+# ── Quick Skills Addition Route ───────────────────────────────────────────────
+# Called when user chooses "Let me add them myself" option
+# Shows all gap skills at once with level selector
+# No conversation needed — user fills everything in one shot
+class QuickSkillsRequest(BaseModel):
+    gap_skills: list        # All missing skills from JD
+    jd_skills: list         # All JD skills for match calculation
+    resume_skills: list     # Skills user already has
+
+@app.post("/quick-skills-summary")
+async def quick_skills_summary(request: QuickSkillsRequest):
+    """
+    Returns gap skills formatted for quick selection UI
+    User can select level for each or skip individual skills
+    No AI explanation involved — pure speed
+    """
+    try:
+        # Format each gap skill for frontend display
+        formatted_skills = []
+        for skill in request.gap_skills:
+            formatted_skills.append({
+                "skill_name": skill,
+                "levels": ["Beginner", "Intermediate", "Advanced"],
+                "selected_level": None,   # frontend fills this
+                "add_to_resume": False    # frontend fills this
+            })
+
+        # Calculate current match before any additions
+        match_before = calculate_match_percentage(
+            request.jd_skills,
+            request.resume_skills,
+            []  # no added skills yet
+        )
+
+        return {
+            "gap_skills": formatted_skills,
+            "match_percentage_before": match_before["match_percentage_before"],
+            "total_gap_count": len(request.gap_skills)
+        }
+
+    except Exception as e:
+        print(f"Quick skills summary error: {e}")
+        return {"error": str(e)}
+
+# ── Match Percentage Route ────────────────────────────────────────────────────
+# Called after skill gap conversation completes
+# Shows user how much their profile improved
+class MatchPercentageRequest(BaseModel):
+    jd_skills: list        # Skills required by job
+    resume_skills: list    # Skills user originally had
+    added_skills: list     # Skills user added during conversation
+
+@app.post("/calculate-match")
+async def calculate_match_route(request: MatchPercentageRequest):
+    """
+    Calculates match percentage before and after skill gap conversation
+    Shows improvement to motivate user
+    """
+    try:
+        result = calculate_match_percentage(
+            request.jd_skills,
+            request.resume_skills,
+            request.added_skills
+        )
+        return result
+    except Exception as e:
+        print(f"Match calculation error: {e}")
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
