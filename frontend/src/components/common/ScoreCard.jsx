@@ -1,38 +1,47 @@
-// Reusable score display card
-// Used by ATS scorer to show category scores
-const ScoreCard = ({ title, score, maxScore, color = 'blue' }) => {
+const ScoreCard = ({ title, score, maxScore }) => {
   const percentage = Math.round((score / maxScore) * 100);
 
-  const colorMap = {
-    blue: 'bg-blue-600',
-    green: 'bg-green-500',
-    orange: 'bg-orange-500',
-    red: 'bg-red-500'
-  };
-
   const getColor = () => {
-    if (percentage >= 80) return 'bg-green-500';
-    if (percentage >= 60) return 'bg-blue-600';
-    if (percentage >= 40) return 'bg-orange-500';
-    return 'bg-red-500';
+    if (percentage >= 80) return '#16a34a';
+    if (percentage >= 60) return '#2563eb';
+    if (percentage >= 40) return '#f97316';
+    return '#ef4444';
   };
 
   return (
-    <div className="bg-white rounded-xl p-4 border border-slate-200">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-slate-600">{title}</span>
-        <span className="text-sm font-bold text-slate-800">
+    <div style={{
+      background: 'var(--slate-50)',
+      borderRadius: 'var(--radius-md)',
+      padding: '12px 14px',
+      transition: 'var(--transition)'
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--blue-50)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'var(--slate-50)'}
+    >
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: '8px'
+      }}>
+        <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--slate-600)' }}>
+          {title}
+        </span>
+        <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--slate-800)' }}>
           {score}/{maxScore}
         </span>
       </div>
-      {/* Progress bar */}
-      <div className="w-full bg-slate-100 rounded-full h-2">
-        <div
-          className={`h-2 rounded-full transition-all duration-700 ${getColor()}`}
-          style={{ width: `${percentage}%` }}
-        ></div>
+      <div style={{
+        width: '100%', height: '6px',
+        background: 'var(--slate-200)',
+        borderRadius: '99px', overflow: 'hidden'
+      }}>
+        <div style={{
+          height: '100%',
+          width: `${percentage}%`,
+          background: getColor(),
+          borderRadius: '99px',
+          transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)'
+        }} />
       </div>
-      <p className="text-xs text-slate-500 mt-1">{percentage}%</p>
     </div>
   );
 };
