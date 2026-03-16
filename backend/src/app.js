@@ -2,26 +2,34 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-//importing routes
 const authRoutes = require('./routes/authRoutes');
 const resumeRoutes = require('./routes/resumeRoutes');
 const jdRoutes = require('./routes/jdRoutes');
 const skillGapRoutes = require('./routes/skillGapRoutes');
 const companyIntelRoutes = require('./routes/companyIntelRoutes');
+const resumeTailorRoutes = require('./routes/resumeTailorRoutes');
+const atsScorerRoutes = require('./routes/atsScorerRoutes');
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));  
+
+app.use(cors({ origin: 'http://localhost:5173' }));
 app.use(express.json());
-app.use(express.urlencoded())
+app.use(express.urlencoded({ extended: true }));
 
-// Navigating to Routes based on the user/frontend requested api
-app.use('/api/auth', authRoutes);   //when frontend req is localhost:5000/api/auth/register or localhost:5000/api/auth/login this line will be executed and this api/auth will be sent to authRoutes file and navigates to that file
-app.use('/api/resume', resumeRoutes);  //when frontend req is localhost:5000/api/resume/ this line will execute and navigate to resumeRoutes file
-app.use('/api/jd', jdRoutes);
-app.use('/api/skill-gap', skillGapRoutes);
-app.use('/api/company', companyIntelRoutes);
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);           // register, login
+app.use('/api/resume', resumeRoutes);       // upload, get resume
+app.use('/api/jd', jdRoutes);               // analyze JD, skill gap
+app.use('/api/skill-gap', skillGapRoutes);  // skill gap agent
+app.use('/api/company', companyIntelRoutes); // company intel
+app.use('/api/tailor', resumeTailorRoutes); // resume tailor agent
+app.use('/api/ats', atsScorerRoutes);
 
-// Health check
+
+
+
+
+// ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'CareerPilot backend running ✅' });
 });

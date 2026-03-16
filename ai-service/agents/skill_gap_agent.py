@@ -1,4 +1,4 @@
-from langchain_groq import ChatGroq
+from utils.llm_provider import get_llm
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 import os
@@ -9,11 +9,8 @@ load_dotenv()
 # ── LLM Setup ─────────────────────────────────────────────────────────────────
 # Using temperature=0.3 for slight creativity in analogies
 # but still keeping explanations accurate and consistent
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.3
-)
+
+llm = get_llm(temperature=0.3)
 
 # ── Schema for skill explanation output ───────────────────────────────────────
 # Pydantic ensures LLM always returns data in exact format we need

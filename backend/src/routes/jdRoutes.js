@@ -43,7 +43,7 @@ router.post('/analyze', protect, async (req, res) => {
 //after analysing the JD we need to compare it with the uploaded resume so below function will do that
 router.post('/skill-gap', protect, async (req, res) => {
   const { jd_text, resume_id } = req.body;
-
+  console.log(resume_id)
   try {
     // Get resume skills from MySQL
     const [resumes] = await pool.query(

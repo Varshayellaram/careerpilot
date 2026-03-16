@@ -1,35 +1,71 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AppProvider, useApp } from './context/AppContext';
+import Layout from './components/layout/Layout';
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import Dashboard from './components/dashboard/Dashboard';
+import PipelinePage from './pages/PipelinePage';
+import ATSPage from './pages/ATSPage';
 
-function App() {
-  const [count, setCount] = useState(0)
+// ── Protected route ───────────────────────────────────────────────────────────
+const ProtectedRoute = ({ children }) => {
+  const { isLoggedIn } = useApp();
+  return isLoggedIn ? children : <Navigate to="/login" replace />;
+};
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+const AppRoutes = () => {
+  const { isLoggedIn } = useApp();
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <Routes>
+      {/* Public */}
+      <Route path="/login" element={
+        isLoggedIn ? <Navigate to="/dashboard" /> : <Login />
+      } />
+      <Route path="/register" element={
+        isLoggedIn ? <Navigate to="/dashboard" /> : <Register />
+      } />
 
-export default App
+      {/* Protected */}
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <Layout><Dashboard /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/pipeline" element={
+        <ProtectedRoute>
+          <Layout><PipelinePage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/ats" element={
+        <ProtectedRoute>
+          <Layout><ATSPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/resumes" element={
+        <ProtectedRoute>
+          <Layout>
+            <div className="text-slate-500 text-center py-20">
+              My Resumes — coming soon
+            </div>
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      {/* Redirects */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
+};
+
+const App = () => (
+  <AppProvider>
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  </AppProvider>
+);
+
+export default App;

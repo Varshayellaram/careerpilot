@@ -1,4 +1,4 @@
-from langchain_groq import ChatGroq
+
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
@@ -14,11 +14,8 @@ load_dotenv()
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 # ── LLM for summarization ─────────────────────────────────────────────────────
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.2  # slight creativity for summaries but mostly factual
-)
+from utils.llm_provider import get_llm
+llm = get_llm(temperature=0.2)
 
 # ── Schema for structured company intelligence output ─────────────────────────
 # Every field here directly feeds into resume tailor and cover letter agents
@@ -137,3 +134,68 @@ def get_company_intelligence(company_name: str, role: str) -> dict:
 
     print(f"Intelligence extracted for {company_name}")
     return result.model_dump()
+
+
+
+"""
+First — What Does Tavily Return?
+When you call tavily.search() it returns a dictionary that looks like this:
+python{
+  "query": "Google latest news 2024 2025",
+  "results": [
+    {
+      "title": "Google launches Gemini 2.0",
+      "url": "https://blog.google/gemini...",
+      "content": "Google has launched Gemini 2.0, a powerful AI model that outperforms previous versions in reasoning and coding tasks. The model is available to developers...",
+      "score": 0.95
+    },
+    {
+      "title": "Google Cloud revenue grows 28%",
+      "url": "https://reuters.com/google...",
+      "content": "Google Cloud reported strong quarterly earnings with 28% revenue growth driven by AI services adoption across enterprise customers...",
+      "score": 0.87
+    },
+    {
+      "title": "Google acquires AI startup",
+      "url": "https://techcrunch.com/...",
+      "content": "Google has acquired an AI startup specializing in robotics for an estimated $500 million to strengthen its hardware division...",
+      "score": 0.82
+    }
+  ]
+}
+
+Line 1: news_results.get("results", [])
+pythonfor r in news_results.get("results", []):
+Break this into two parts:
+.get("results", [])
+This is a safe way to access a dictionary key:
+python# Unsafe way
+news_results["results"]  
+# if "results" key missing → crashes with KeyError ❌
+
+# Safe way
+news_results.get("results", [])
+# if "results" key missing → returns [] instead ✅
+# never crashes
+```
+
+The `[]` is the **default value** — if Tavily returns nothing or something unexpected — you get an empty list instead of a crash.
+
+**`for r in ...`**
+
+Loops through each result in the list:
+```
+Loop 1 → r = first result  (Google Gemini news)
+Loop 2 → r = second result (Google Cloud earnings)
+Loop 3 → r = third result  (Google acquisition)
+Each r is one search result dictionary:
+pythonr = {
+  "title": "Google launches Gemini 2.0",
+  "url": "https://...",
+  "content": "Google has launched Gemini 2.0...",
+  "score": 0.95
+}
+
+Line 2: all_results.append(...)
+pythonall_results.append(f"NEWS: {r['title']} - {r['content'][:300]}")
+"""

@@ -1,7 +1,8 @@
-from langchain_groq import ChatGroq
+
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from typing import List
+from utils.llm_provider import get_llm
 import os
 from dotenv import load_dotenv
 
@@ -17,11 +18,8 @@ class JDAnalysis(BaseModel):
     experience_required: str = Field(description="Years of experience required")
 
 # ── LLM setup ─────────────────────────────────────────────
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0
-)
+
+llm = get_llm(temperature=0)
 
 structured_llm = llm.with_structured_output(JDAnalysis)
 
