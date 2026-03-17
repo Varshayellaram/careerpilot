@@ -8,6 +8,9 @@ def export_as_plain_text(
     tailored_sections: dict,
     section_order: list
 ) -> str:
+
+    print("tailored sections ",tailored_sections)
+    print("section_order ",section_order)
     """
     Formats tailored resume as clean plain text.
 
@@ -53,15 +56,15 @@ def export_as_plain_text(
     # Divider
     lines.append("─" * 60)
     lines.append("")
-
+    
     # ── Tailored sections ─────────────────────────────────────────────────────
     # In original order, with clear section headers
     for section_name in section_order:
-        content = tailored_sections.get(section_name)
-
+        content = tailored_sections.get(section_name.upper())
+        print("content ",content)
         if not content:
             continue
-
+        
         # Section header in uppercase
         lines.append(section_name.upper())
         lines.append("─" * 30)
@@ -77,5 +80,5 @@ def export_as_plain_text(
                     lines.append(f"• {item}")
 
         lines.append("")  # blank line between sections
-
+    print("lines ",lines)
     return "\n".join(lines)

@@ -120,7 +120,10 @@ export const tailorAPI = {
   getMyResumes: () =>
     api.get('/tailor/my-resumes'),
   downloadResumePDF: (id) =>
-    api.post('/tailor/pdf', { tailored_id: id })
+    api.post('/tailor/pdf', { tailored_id: id }),
+  getPlainText: (tailoredId) =>
+    api.post('/tailor/text', { tailored_id: tailoredId }),
+
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

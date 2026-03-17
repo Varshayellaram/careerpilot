@@ -7,6 +7,7 @@ import Dashboard from './components/dashboard/Dashboard';
 import PipelinePage from './pages/PipelinePage';
 import ATSPage from './pages/ATSPage';
 import MyResumesPage from './pages/MyResumesPage';
+import PlainTextPage from './pages/PlainTextPage';
 
 // ── Protected route ───────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -47,6 +48,11 @@ const AppRoutes = () => {
       <Route path="/resumes" element={
         <ProtectedRoute>
           <Layout><MyResumesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/resumes/plaintext/:id" element={
+        <ProtectedRoute>
+          <PlainTextPage />
         </ProtectedRoute>
       } />
 

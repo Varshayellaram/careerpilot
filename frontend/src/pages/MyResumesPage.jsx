@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { tailorAPI } from '../services/api';
 import { Download, FileText, Calendar, Building2, Target, Inbox } from 'lucide-react';
+import { useNavigate }  from 'react-router-dom';
 
 const MyResumesPage = () => {
   const [resumes, setResumes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchResumes();
@@ -156,34 +158,66 @@ const MyResumesPage = () => {
                 </div>
               </div>
 
-              {/* Download button */}
-              {resume.has_pdf ? (
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+
+                {/* Download PDF */}
+                {resume.has_pdf ? (
+                  <button
+                    onClick={() => handleDownload(resume.id, resume.pdf_filename)}
+                    disabled={downloading === resume.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 16px',
+                      background: downloading === resume.id ? 'var(--slate-100)' : 'var(--blue-600)',
+                      color: downloading === resume.id ? 'var(--slate-400)' : 'white',
+                      border: 'none', borderRadius: 'var(--radius-md)',
+                      fontSize: '13px', fontWeight: '600',
+                      cursor: downloading === resume.id ? 'not-allowed' : 'pointer',
+                      fontFamily: 'DM Sans, sans-serif',
+                      transition: 'var(--transition)'
+                    }}
+                  >
+                    <Download size={14} />
+                    {downloading === resume.id ? 'Downloading...' : 'Download'}
+                  </button>
+                ) : (
+                  <span style={{
+                    fontSize: '12px', color: 'var(--slate-400)',
+                    fontStyle: 'italic', alignSelf: 'center'
+                  }}>
+                    PDF not available
+                  </span>
+                )}
+
+                {/* Plain Text */}
                 <button
-                  onClick={() => handleDownload(resume.id, resume.pdf_filename)}
-                  disabled={downloading === resume.id}
+                  onClick={() => navigate(`/resumes/plaintext/${resume.id}`)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '8px 16px',
-                    background: downloading === resume.id ? 'var(--slate-100)' : 'var(--blue-600)',
-                    color: downloading === resume.id ? 'var(--slate-400)' : 'white',
-                    border: 'none', borderRadius: 'var(--radius-md)',
+                    background: 'white',
+                    color: 'var(--slate-600)',
+                    border: '1.5px solid var(--slate-200)',
+                    borderRadius: 'var(--radius-md)',
                     fontSize: '13px', fontWeight: '600',
-                    cursor: downloading === resume.id ? 'not-allowed' : 'pointer',
-                    fontFamily: 'DM Sans, sans-serif',
-                    transition: 'var(--transition)', flexShrink: 0
+                    cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                    transition: 'var(--transition)'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = 'var(--slate-300)';
+                    e.currentTarget.style.background = 'var(--slate-50)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'var(--slate-200)';
+                    e.currentTarget.style.background = 'white';
                   }}
                 >
-                  <Download size={14} />
-                  {downloading === resume.id ? 'Downloading...' : 'Download'}
+                  <FileText size={14} />
+                  Plain Text
                 </button>
-              ) : (
-                <span style={{
-                  fontSize: '12px', color: 'var(--slate-400)',
-                  fontStyle: 'italic', flexShrink: 0
-                }}>
-                  PDF not available
-                </span>
-              )}
+
+              </div>
             </div>
           ))}
         </div>
