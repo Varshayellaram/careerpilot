@@ -171,26 +171,16 @@ const extractStructured = async (req, res) => {
 // Receives tailored sections back
 // Restores links and saves to tailored_resumes table
 const tailorResume = async (req, res) => {
-  const {
-    structured_id,    // from step 1
-    resume_id,        // original resume
-    jd_analysis,      // from Agent 1
-    company_intel,    // from Agent 3
-    added_skills      // from Agent 2
-  } = req.body;
+  const { structured_id, resume_id, jd_analysis, company_intel, added_skills } = req.body;
 
   try {
-    // Get structured data from MySQL
     const [structured] = await pool.query(
-      `SELECT * FROM resume_structured 
-       WHERE id = ? AND user_id = ?`,
+      `SELECT * FROM resume_structured WHERE id = ? AND user_id = ?`,
       [structured_id, req.user.userId]
     );
 
     if (structured.length === 0) {
-      return res.status(404).json({
-        message: 'Structured resume not found. Run extract-structured first.'
-      });
+      return res.status(404).json({ message: 'Structured resume not found. Run extract-structured first.' });
     }
 
     const sections = JSON.parse(structured[0].sections);
@@ -200,36 +190,53 @@ const tailorResume = async (req, res) => {
 
     console.log(`Tailoring resume ${resume_id}...`);
 
-    // Send masked sections to Python tailor agent
-    // Links are still placeholders at this point
+    // Send to Python tailor agent
     const pythonResponse = await axios.post(
       `${process.env.PYTHON_SERVICE_URL}/tailor-resume`,
-      {
-        sections,
-        section_order: sectionOrder,
-        jd_analysis,
-        company_intel,
-        added_skills: added_skills || []
-      },
-      { timeout: 60000 } // 60 seconds — complex operation
+      { sections, section_order: sectionOrder, jd_analysis, company_intel, added_skills: added_skills || [] },
+      { timeout: 60000 }
     );
 
     const tailoredData = pythonResponse.data;
+    const restoredSections = restoreLinksInSections(tailoredData.tailored_sections, linkRegistry);
 
-    // Restore links back into tailored sections
-    // Replace {{PROJECTS_LINK_0}} etc with real URLs
-    const restoredSections = restoreLinksInSections(
-      tailoredData.tailored_sections,
-      linkRegistry
-    );
+    // ── Generate PDF immediately after tailoring ──────────────────────────────
+    let pdfBuffer = null;
+    let pdfFilename = null;
 
-    // Save complete tailored resume to MySQL
+    try {
+      console.log('Generating PDF...');
+      const pdfResponse = await axios.post(
+        `${process.env.PYTHON_SERVICE_URL}/generate-pdf`,
+        {
+          personal_info: personalInfo,
+          tailored_sections: restoredSections,
+          section_order: sectionOrder,
+          original_pdf_base64: ''   // uses clean ATS layout
+        },
+        { timeout: 30000 }
+      );
+
+      pdfBuffer = Buffer.from(pdfResponse.data.pdf_base64, 'base64');
+
+      // Build filename from company name + candidate name
+      const candidateName = personalInfo.full_name?.replace(/\s+/g, '_') || 'Resume';
+      const companyName = company_intel?.company_name?.replace(/\s+/g, '_') || 'Company';
+      pdfFilename = `${candidateName}_${companyName}_tailored.pdf`;
+
+      console.log(`PDF generated: ${pdfFilename} (${pdfBuffer.length} bytes)`);
+    } catch (pdfErr) {
+      // PDF generation failed — still save tailored sections, just no PDF
+      console.error('PDF generation failed (non-fatal):', pdfErr.message);
+    }
+
+    // ── Save everything to tailored_resumes ──────────────────────────────────
     const [insertResult] = await pool.query(
       `INSERT INTO tailored_resumes 
        (user_id, resume_id, structured_id, tailored_sections,
-        personal_info, link_registry, jd_analysis, 
-        company_intel, added_skills)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        personal_info, link_registry, jd_analysis, company_intel, added_skills,
+        pdf_data, pdf_filename, job_title, company_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.userId,
         resume_id,
@@ -239,7 +246,11 @@ const tailorResume = async (req, res) => {
         JSON.stringify(linkRegistry),
         JSON.stringify(jd_analysis),
         JSON.stringify(company_intel),
-        JSON.stringify(added_skills || [])
+        JSON.stringify(added_skills || []),
+        pdfBuffer,          // LONGBLOB — null if PDF failed
+        pdfFilename,
+        (jd_analysis?.role_summary || '').substring(0, 500),
+        company_intel?.company_name || ''
       ]
     );
 
@@ -250,13 +261,15 @@ const tailorResume = async (req, res) => {
       personal_info: personalInfo,
       section_order: sectionOrder,
       changes: tailoredData.changes,
-      tailoring_summary: tailoredData.tailoring_summary
+      tailoring_summary: tailoredData.tailoring_summary,
+      pdf_ready: pdfBuffer !== null,      // tells frontend PDF is saved
+      pdf_filename: pdfFilename
     });
 
   } catch (error) {
     console.error('Tailor resume error:', error.message);
     console.error('Details:', error.response?.data);
-    res.status(500).json({ message: 'Failed to tailor resume' });
+    res.status(500).json({ message: 'Failed to tailor resume', details: error.message });
   }
 };
 
@@ -267,53 +280,58 @@ const generatePDF = async (req, res) => {
   const { tailored_id } = req.body;
 
   try {
-    // Get tailored resume data
+    const [rows] = await pool.query(
+      `SELECT pdf_data, pdf_filename FROM tailored_resumes
+       WHERE id = ? AND user_id = ?`,
+      [tailored_id, req.user.userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Tailored resume not found' });
+    }
+
+    if (!rows[0].pdf_data) {
+      // PDF wasn't saved — regenerate on the fly
+      return regeneratePDF(req, res, tailored_id);
+    }
+
+    const pdfBase64 = rows[0].pdf_data.toString('base64');
+    const filename = rows[0].pdf_filename || 'tailored_resume.pdf';
+
+    res.json({
+      message: 'PDF retrieved successfully',
+      pdf_base64: pdfBase64,
+      filename
+    });
+
+  } catch (error) {
+    console.error('Generate PDF error:', error.message);
+    res.status(500).json({ message: 'Failed to get PDF' });
+  }
+};
+
+// Fallback — regenerate PDF if not saved in DB
+const regeneratePDF = async (req, res, tailored_id) => {
+  try {
     const [tailored] = await pool.query(
-      `SELECT tr.*, r.original_filename
-       FROM tailored_resumes tr
+      `SELECT tr.*, r.original_filename FROM tailored_resumes tr
        JOIN resumes r ON tr.resume_id = r.id
        WHERE tr.id = ? AND tr.user_id = ?`,
       [tailored_id, req.user.userId]
     );
 
-    if (tailored.length === 0) {
-      return res.status(404).json({ message: 'Tailored resume not found' });
-    }
-
-    const tailoredData = tailored[0];
-
-    // Get structured data for section order
     const [structured] = await pool.query(
-      `SELECT section_order FROM resume_structured 
-       WHERE id = ?`,
-      [tailoredData.structured_id]
+      `SELECT section_order FROM resume_structured WHERE id = ?`,
+      [tailored[0].structured_id]
     );
 
-    // Get original PDF file bytes
-    // We stored the original PDF in uploads folder
-    // If not available send empty string — replicator uses defaults
-    let originalPdfBase64 = '';
-    try {
-      const uploadPath = path.join(
-        __dirname, '../../uploads',
-        tailoredData.original_filename
-      );
-      if (fs.existsSync(uploadPath)) {
-        const pdfBytes = fs.readFileSync(uploadPath);
-        originalPdfBase64 = pdfBytes.toString('base64');
-      }
-    } catch (e) {
-      console.log('Original PDF not found — using default layout');
-    }
-
-    // Send to Python PDF generator
     const pythonResponse = await axios.post(
       `${process.env.PYTHON_SERVICE_URL}/generate-pdf`,
       {
-        personal_info: JSON.parse(tailoredData.personal_info),
-        tailored_sections: JSON.parse(tailoredData.tailored_sections),
+        personal_info: JSON.parse(tailored[0].personal_info),
+        tailored_sections: JSON.parse(tailored[0].tailored_sections),
         section_order: JSON.parse(structured[0].section_order),
-        original_pdf_base64: originalPdfBase64
+        original_pdf_base64: ''
       },
       { timeout: 30000 }
     );
@@ -321,66 +339,14 @@ const generatePDF = async (req, res) => {
     res.json({
       message: 'PDF generated successfully',
       pdf_base64: pythonResponse.data.pdf_base64,
-      filename: `tailored_${tailoredData.original_filename}`
+      filename: `tailored_${tailored[0].original_filename}`
     });
 
   } catch (error) {
-    console.error('Generate PDF error:', error.message);
-    res.status(500).json({ message: 'Failed to generate PDF' });
+    console.error('Regenerate PDF error:', error.message);
+    res.status(500).json({ message: 'Failed to regenerate PDF' });
   }
 };
-
-
-// ── Step 3B: Generate Plain Text ──────────────────────────────────────────────
-// Option B — Formatted plain text for copy-paste
-const generatePlainText = async (req, res) => {
-  const { tailored_id } = req.body;
-
-  try {
-    // Get tailored resume data
-    const [tailored] = await pool.query(
-      `SELECT tr.*
-       FROM tailored_resumes tr
-       WHERE tr.id = ? AND tr.user_id = ?`,
-      [tailored_id, req.user.userId]
-    );
-
-    if (tailored.length === 0) {
-      return res.status(404).json({ message: 'Tailored resume not found' });
-    }
-
-    const tailoredData = tailored[0];
-
-    // Get section order
-    const [structured] = await pool.query(
-      `SELECT section_order FROM resume_structured 
-       WHERE id = ?`,
-      [tailoredData.structured_id]
-    );
-
-    // Send to Python plain text exporter
-    const pythonResponse = await axios.post(
-      `${process.env.PYTHON_SERVICE_URL}/generate-text`,
-      {
-        personal_info: JSON.parse(tailoredData.personal_info),
-        tailored_sections: JSON.parse(tailoredData.tailored_sections),
-        section_order: JSON.parse(structured[0].section_order)
-      },
-      { timeout: 15000 }
-    );
-
-    res.json({
-      message: 'Plain text generated successfully',
-      plain_text: pythonResponse.data.plain_text
-    });
-
-  } catch (error) {
-    console.error('Generate plain text error:', error.message);
-    res.status(500).json({ message: 'Failed to generate plain text' });
-  }
-};
-
-
 // ── Helper: Restore links in tailored sections ────────────────────────────────
 // Replaces {{PROJECTS_LINK_0}} etc with real URLs
 // Called after tailoring, before saving to DB
@@ -420,9 +386,110 @@ const restoreLinksInSections = (tailoredSections, linkRegistry) => {
 };
 
 
+// ── Get all tailored resumes for user (My Resumes page) ───────────────────────
+const getMyResumes = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+         tr.id,
+         tr.pdf_filename,
+         tr.job_title,
+         tr.company_name,
+         tr.ats_score,
+         tr.created_at,
+         r.original_filename AS original_resume,
+         CASE WHEN tr.pdf_data IS NOT NULL THEN true ELSE false END AS has_pdf
+       FROM tailored_resumes tr
+       JOIN resumes r ON tr.resume_id = r.id
+       WHERE tr.user_id = ?
+       ORDER BY tr.created_at DESC`,
+      [req.user.userId]
+    );
+
+    res.json({ message: 'My resumes fetched', resumes: rows });
+  } catch (error) {
+    console.error('My resumes error:', error.message);
+    res.status(500).json({ message: 'Failed to fetch resumes' });
+  }
+};
+
+// ── Download a saved PDF by tailored_resume id ────────────────────────────────
+const downloadResumePDF = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT pdf_data, pdf_filename FROM tailored_resumes
+       WHERE id = ? AND user_id = ?`,
+      [id, req.user.userId]
+    );
+
+    if (rows.length === 0 || !rows[0].pdf_data) {
+      return res.status(404).json({ message: 'PDF not found' });
+    }
+
+    // Stream PDF directly — browser downloads it
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="${rows[0].pdf_filename || 'tailored_resume.pdf'}"`);
+    res.send(rows[0].pdf_data);
+
+  } catch (error) {
+    console.error('Download error:', error.message);
+    res.status(500).json({ message: 'Download failed' });
+  }
+};
+
+
+const generatePlainText = async (req, res) => {
+  const { tailored_id } = req.body;
+
+  try {
+    const [tailored] = await pool.query(
+      `SELECT tr.* FROM tailored_resumes tr
+       WHERE tr.id = ? AND tr.user_id = ?`,
+      [tailored_id, req.user.userId]
+    );
+
+    if (tailored.length === 0) {
+      return res.status(404).json({ message: 'Tailored resume not found' });
+    }
+
+    const tailoredData = tailored[0];
+
+    const [structured] = await pool.query(
+      `SELECT section_order FROM resume_structured WHERE id = ?`,
+      [tailoredData.structured_id]
+    );
+
+    const pythonResponse = await axios.post(
+      `${process.env.PYTHON_SERVICE_URL}/generate-text`,
+      {
+        personal_info: JSON.parse(tailoredData.personal_info),
+        tailored_sections: JSON.parse(tailoredData.tailored_sections),
+        section_order: JSON.parse(structured[0].section_order)
+      },
+      { timeout: 15000 }
+    );
+
+    res.json({
+      message: 'Plain text generated successfully',
+      plain_text: pythonResponse.data.plain_text
+    });
+
+  } catch (error) {
+    console.error('Generate plain text error:', error.message);
+    res.status(500).json({ message: 'Failed to generate plain text' });
+  }
+};
+
+
+
 module.exports = {
   extractStructured,
   tailorResume,
   generatePDF,
-  generatePlainText
+  generatePlainText,
+  getMyResumes,
+  downloadResumePDF
 };

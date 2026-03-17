@@ -112,14 +112,15 @@ export const companyAPI = {
 // RESUME TAILOR APIs — Agent 4
 // ─────────────────────────────────────────────────────────────────────────────
 export const tailorAPI = {
-  // Tailor resume
   tailor: (data) => api.post('/tailor/resume', data),
-  // Generate PDF
   generatePDF: (tailoredId) =>
     api.post('/tailor/pdf', { tailored_id: tailoredId }),
-  // Generate plain text
   generateText: (tailoredId) =>
-    api.post('/tailor/text', { tailored_id: tailoredId })
+    api.post('/tailor/text', { tailored_id: tailoredId }),   // ← comma added
+  getMyResumes: () =>
+    api.get('/tailor/my-resumes'),
+  downloadResumePDF: (id) =>
+    api.post('/tailor/pdf', { tailored_id: id })
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

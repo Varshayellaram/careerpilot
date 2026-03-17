@@ -6,6 +6,7 @@ import Register from './components/auth/Register';
 import Dashboard from './components/dashboard/Dashboard';
 import PipelinePage from './pages/PipelinePage';
 import ATSPage from './pages/ATSPage';
+import MyResumesPage from './pages/MyResumesPage';
 
 // ── Protected route ───────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -45,11 +46,7 @@ const AppRoutes = () => {
       } />
       <Route path="/resumes" element={
         <ProtectedRoute>
-          <Layout>
-            <div className="text-slate-500 text-center py-20">
-              My Resumes — coming soon
-            </div>
-          </Layout>
+          <Layout><MyResumesPage /></Layout>
         </ProtectedRoute>
       } />
 
