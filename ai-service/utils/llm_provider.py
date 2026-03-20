@@ -12,6 +12,7 @@ def get_llm(temperature=0):
     Switch providers by changing USE_GEMINI in .env
     No code changes needed anywhere else
     """
+    
     use_gemini = os.getenv("USE_GEMINI", "false").lower() == "true"
     groq_key = os.getenv("GROQ_API_KEY")
     gemini_key = os.getenv("GEMINI_API_KEY")
